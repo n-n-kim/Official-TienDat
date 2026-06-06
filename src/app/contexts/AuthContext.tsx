@@ -5,6 +5,7 @@ import {
   getStoredUser,
   setStoredUser,
 } from '../services/googleSession';
+import { signOutFirebase } from '../lib/firebase';
 
 export interface User {
   id: string;
@@ -56,6 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     clearStoredUser();
+    void signOutFirebase().catch(() => {
+      // Local logout should still succeed even if the provider sign-out fails.
+    });
   };
 
   const canUseCloudSave = Boolean(user?.idToken);

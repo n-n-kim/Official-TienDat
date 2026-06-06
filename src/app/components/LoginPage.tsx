@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { signInWithPopup } from 'firebase/auth';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { User } from '../contexts/AuthContext';
+import { auth, googleProvider } from '../lib/firebase';
 
 interface LoginPageProps {
   onBack: () => void;
@@ -12,107 +14,34 @@ interface LoginPageProps {
 export function LoginPage({ onBack, onLoginSuccess }: LoginPageProps) {
   const { login } = useAuth();
   const { language } = useLanguage();
-  const googleButtonRef = useRef<HTMLDivElement | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+  const handleGoogleLogin = async () => {
+    setGoogleError(null);
 
-    if (!clientId) {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const firebaseUser = result.user;
+      const idToken = await firebaseUser.getIdToken();
+
+      const userData: User = {
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName || firebaseUser.email || 'Google User',
+        email: firebaseUser.email || '',
+        avatar: firebaseUser.photoURL || '',
+        idToken,
+      };
+
+      login(userData);
+      onLoginSuccess?.();
+    } catch {
       setGoogleError(
         language === 'vi'
-          ? 'Chua cau hinh Google Client ID.'
-          : 'Google Client ID is not configured.',
+          ? 'Khong the dang nhap bang Google qua Firebase.'
+          : 'Could not sign in with Google via Firebase.',
       );
-      return;
     }
-
-    let cancelled = false;
-
-    const handleCredentialResponse = (response: google.accounts.id.CredentialResponse) => {
-      try {
-        const payload = decodeJwtPayload(response.credential);
-        const userData: User = {
-          id: payload.sub,
-          name: payload.name,
-          email: payload.email,
-          avatar: payload.picture,
-          idToken: response.credential,
-        };
-
-        login(userData);
-        onLoginSuccess?.();
-      } catch {
-        setGoogleError(
-          language === 'vi'
-            ? 'Khong the xu ly dang nhap Google.'
-            : 'Could not complete Google sign-in.',
-        );
-      }
-    };
-
-    const initializeGoogle = () => {
-      if (cancelled || !window.google?.accounts.id || !googleButtonRef.current) {
-        return;
-      }
-
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse,
-      });
-
-      googleButtonRef.current.innerHTML = '';
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        shape: 'rectangular',
-        width: 320,
-      });
-    };
-
-    if (window.google?.accounts.id) {
-      initializeGoogle();
-    } else {
-      const existingScript = document.querySelector<HTMLScriptElement>(
-        'script[src="https://accounts.google.com/gsi/client"]',
-      );
-
-      const script =
-        existingScript ??
-        Object.assign(document.createElement('script'), {
-          src: 'https://accounts.google.com/gsi/client',
-          async: true,
-          defer: true,
-        });
-
-      const handleLoad = () => initializeGoogle();
-      const handleError = () =>
-        setGoogleError(
-          language === 'vi'
-            ? 'Khong tai duoc Google Sign-In.'
-            : 'Failed to load Google Sign-In.',
-        );
-
-      script.addEventListener('load', handleLoad);
-      script.addEventListener('error', handleError);
-
-      if (!existingScript) {
-        document.head.appendChild(script);
-      }
-
-      return () => {
-        cancelled = true;
-        script.removeEventListener('load', handleLoad);
-        script.removeEventListener('error', handleError);
-      };
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [language, login, onLoginSuccess]);
+  };
 
   const handleGuestLogin = () => {
     const mockUser = {
@@ -157,9 +86,14 @@ export function LoginPage({ onBack, onLoginSuccess }: LoginPageProps) {
             </div>
 
             <div className="space-y-4">
-              <div className="flex justify-center">
-                <div ref={googleButtonRef} />
-              </div>
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full rounded-none border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
+              >
+                {language === 'vi'
+                  ? 'Dang nhap voi Google'
+                  : 'Continue with Google'}
+              </button>
               {googleError ? (
                 <p className="text-center text-sm text-red-600">{googleError}</p>
               ) : null}
@@ -199,30 +133,4 @@ export function LoginPage({ onBack, onLoginSuccess }: LoginPageProps) {
       </div>
     </main>
   );
-}
-
-interface GoogleJwtPayload {
-  sub: string;
-  name: string;
-  email: string;
-  picture: string;
-}
-
-function decodeJwtPayload(token: string): GoogleJwtPayload {
-  const [, payload] = token.split('.');
-
-  if (!payload) {
-    throw new Error('Missing JWT payload');
-  }
-
-  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    '=',
-  );
-  const decoded = window.atob(padded);
-  const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
-  const json = new TextDecoder().decode(bytes);
-
-  return JSON.parse(json) as GoogleJwtPayload;
 }
