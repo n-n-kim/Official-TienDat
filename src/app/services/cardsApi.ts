@@ -5,7 +5,8 @@ import {
   getStoredUser,
 } from './googleSession';
 
-const API_BASE = '/api/cards';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const API_BASE = `${API_BASE_URL}/api/cards`;
 
 export async function listWeddingCardDesigns(): Promise<WeddingCardDesign[]> {
   const response = await fetch(API_BASE, {
