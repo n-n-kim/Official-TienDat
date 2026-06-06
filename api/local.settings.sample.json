@@ -3,7 +3,9 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
-    "GOOGLE_CLIENT_ID": "your-google-client-id.apps.googleusercontent.com",
+    "FIREBASE_PROJECT_ID": "official-tiendat",
+    "FIREBASE_CLIENT_EMAIL": "firebase-adminsdk-xxxxx@official-tiendat.iam.gserviceaccount.com",
+    "FIREBASE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\\nYOUR_PRIVATE_KEY\\n-----END PRIVATE KEY-----\\n",
     "AZURE_STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true",
     "AZURE_TABLE_NAME": "WeddingCardDesigns",
     "AZURE_CHAT_CONVERSATIONS_TABLE_NAME": "ConsultationConversations",

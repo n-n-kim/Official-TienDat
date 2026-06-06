@@ -1,22 +1,7 @@
-const { OAuth2Client } = require('google-auth-library');
+const admin = require('firebase-admin');
 const { json } = require('./http');
 
-const GOOGLE_CLIENT_IDS = getAllowedClientIds();
 const ADMIN_EMAILS = getAdminEmails();
-
-let oauthClient;
-
-function getOAuthClient() {
-  if (GOOGLE_CLIENT_IDS.length === 0) {
-    throw new Error('GOOGLE_CLIENT_ID is not configured.');
-  }
-
-  if (!oauthClient) {
-    oauthClient = new OAuth2Client();
-  }
-
-  return oauthClient;
-}
 
 async function requireAuthenticatedUser(context, req) {
   const idToken = extractBearerToken(req);
@@ -27,51 +12,54 @@ async function requireAuthenticatedUser(context, req) {
   }
 
   try {
-    const client = getOAuthClient();
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience: GOOGLE_CLIENT_IDS,
-    });
+    const firebaseApp = getFirebaseAdminApp();
+    const payload = await firebaseApp.auth().verifyIdToken(idToken);
 
-    const payload = ticket.getPayload();
-
-    if (!payload?.sub || !payload.email || !payload.name) {
-      json(context, 401, { message: 'Invalid Google ID token payload.' });
+    if (!(payload?.uid || payload?.sub) || !payload.email) {
+      json(context, 401, { message: 'Invalid Firebase ID token payload.' });
       return null;
     }
 
     return {
-      id: payload.sub,
+      id: payload.uid || payload.sub,
       email: payload.email,
-      name: payload.name,
+      name: payload.name || payload.email,
       avatar: payload.picture || '',
     };
   } catch (error) {
-    const debugPayload = decodeJwtPayload(idToken);
-
-    context.log.warn('Google ID token verification failed', {
+    context.log.warn('Firebase ID token verification failed', {
       errorMessage: error?.message || 'Unknown Google token verification error.',
-      expectedAudience: GOOGLE_CLIENT_IDS,
-      tokenAudience: debugPayload?.aud || null,
-      tokenIssuer: debugPayload?.iss || null,
-      tokenExpiry: debugPayload?.exp || null,
-      tokenSubject: debugPayload?.sub || null,
     });
 
     json(context, 401, {
-      message: error?.message || 'Invalid or expired Google ID token.',
+      message: error?.message || 'Invalid or expired Firebase ID token.',
     });
     return null;
   }
 }
 
-function getAllowedClientIds() {
-  const rawValue = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+function getFirebaseAdminApp() {
+  if (admin.apps.length > 0) {
+    return admin.app();
+  }
 
-  return rawValue
-    .split(',')
-    .map((clientId) => clientId.trim())
-    .filter(Boolean);
+  const projectId = process.env.FIREBASE_PROJECT_ID || '';
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || '';
+  const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY || '');
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      'Firebase Admin is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.',
+    );
+  }
+
+  return admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+  });
 }
 
 function getAdminEmails() {
@@ -94,6 +82,10 @@ function isAdminUser(user) {
   return ADMIN_EMAILS.includes(user.email.toLowerCase());
 }
 
+function normalizePrivateKey(value) {
+  return value.replace(/\\n/g, '\n').trim();
+}
+
 function extractBearerToken(req) {
   const directGoogleToken =
     req.headers?.['x-google-id-token'] ||
@@ -110,24 +102,6 @@ function extractBearerToken(req) {
   }
 
   return authorization.slice('Bearer '.length).trim();
-}
-
-function decodeJwtPayload(token) {
-  try {
-    const [, payload] = token.split('.');
-
-    if (!payload) {
-      return null;
-    }
-
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    const jsonPayload = Buffer.from(padded, 'base64').toString('utf8');
-
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
 }
 
 module.exports = {
