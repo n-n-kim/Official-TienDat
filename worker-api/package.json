@@ -1,0 +1,21 @@
+{
+  "name": "official-tiendat-worker-api",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 execute official-tiendat-chat --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute official-tiendat-chat --remote --file=./schema.sql"
+  },
+  "dependencies": {
+    "jose": "5.9.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260607.1",
+    "typescript": "5.8.3",
+    "wrangler": "4.20.0"
+  }
+}

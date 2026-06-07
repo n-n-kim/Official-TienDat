@@ -23,7 +23,10 @@ export async function listChatConversations(): Promise<ChatConversation[]> {
     throw await buildApiError(response, 'Failed to load conversations.');
   }
 
-  return (await response.json()) as ChatConversation[];
+  return readJsonResponse<ChatConversation[]>(
+    response,
+    'Chat API returned a non-JSON response while loading conversations.',
+  );
 }
 
 export async function createChatConversation(
@@ -42,7 +45,10 @@ export async function createChatConversation(
     throw await buildApiError(response, 'Failed to create conversation.');
   }
 
-  return (await response.json()) as ChatConversation;
+  return readJsonResponse<ChatConversation>(
+    response,
+    'Chat API returned a non-JSON response while creating a conversation.',
+  );
 }
 
 export async function listConversationMessages(conversationId: string): Promise<ChatMessage[]> {
@@ -54,7 +60,10 @@ export async function listConversationMessages(conversationId: string): Promise<
     throw await buildApiError(response, 'Failed to load messages.');
   }
 
-  return (await response.json()) as ChatMessage[];
+  return readJsonResponse<ChatMessage[]>(
+    response,
+    'Chat API returned a non-JSON response while loading messages.',
+  );
 }
 
 export async function sendChatMessage(
@@ -74,7 +83,10 @@ export async function sendChatMessage(
     throw await buildApiError(response, 'Failed to send message.');
   }
 
-  return (await response.json()) as ChatMessage;
+  return readJsonResponse<ChatMessage>(
+    response,
+    'Chat API returned a non-JSON response while sending a message.',
+  );
 }
 
 export async function updateConversationStatus(
@@ -94,7 +106,10 @@ export async function updateConversationStatus(
     throw await buildApiError(response, 'Failed to update conversation status.');
   }
 
-  return (await response.json()) as ChatConversation;
+  return readJsonResponse<ChatConversation>(
+    response,
+    'Chat API returned a non-JSON response while updating conversation status.',
+  );
 }
 
 async function buildApiError(response: Response, fallbackMessage: string): Promise<Error> {
@@ -129,4 +144,17 @@ async function readApiErrorMessage(response: Response): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+async function readJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!contentType.includes('application/json')) {
+    const rawBody = await response.text();
+    const preview = rawBody.trim().slice(0, 120);
+
+    throw new Error(preview.startsWith('<') ? fallbackMessage : preview || fallbackMessage);
+  }
+
+  return (await response.json()) as T;
 }
